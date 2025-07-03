@@ -1,0 +1,79 @@
+# -*- coding: utf-8; mode: tcl; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- vim:fenc=utf-8:ft=tcl:et:sw=4:ts=4:sts=4
+
+PortSystem              1.0
+PortGroup               select 1.0
+
+name                    opentofu
+categories              sysutils
+installs_libs           no
+license                 MPL-2
+homepage                https://opentofu.org/
+
+maintainers             {@snuxoll nuxoll.me:stefan}\
+                        openmaintainer
+
+subport opentofu-1.10 {
+    set version 1.10.2
+    checksums           rmd160  4bbcb1bd1250169a7d0bee209767878c37b75fa6 \
+                        sha256  442d51e0595e79a3eceb84d8a2891e691f7277d0da7dd34f87836692d4aeca91 \
+                        size    4461790
+}
+
+subport opentofu_select {}
+
+if {${subport} eq ${name}} {
+    PortGroup           obsolete 1.0
+
+    revision                0
+    replaced_by             opentofu-1.10
+    version                 1.10.2
+} elseif {${subport} eq "opentofu_select"} {
+    version                 0.0.0
+    revision                0
+    supported_archs         noarch
+    platforms               any
+
+    conflicts               tenv
+
+    distfiles
+    use_configure           no
+    build {}
+
+    destroot {
+        select::install opentofu ${filespath}/base
+        select::install opentofu ${filespath}/none
+    }
+
+    livecheck.type          none
+} else {
+    PortGroup               golang 1.0
+
+    global version
+    set major               [lindex [split ${version} .] 0]
+    set minor               [lindex [split ${version} .] 1]
+    set binaryName          tofu-${major}.${minor}
+
+    depends_run             port:opentofu_select
+    supported_archs         x86_64 arm64
+
+    go.offline_build        no
+    go.setup                github.com/opentofu/opentofu ${version} v
+
+    select.group            opentofu
+    select.file             ${workpath}/opentofu-${major}.${minor}
+
+    build.pre_args-append   -ldflags="-X 'github.com/opentofu/opentofu/version.dev=no'"\
+                            -o ./_dist/${binaryName}
+    build.args              ./cmd/tofu
+    pre-build {
+        file copy ${filespath}/opentofuX.YY.template ${workpath}/opentofu-${major}.${minor}
+        reinplace "s|@@BINARY_NAME@@|${binaryName}|g" ${workpath}/opentofu-${major}.${minor}
+    }
+    destroot {
+        xinstall -m 0755 ${worksrcpath}/_dist/${binaryName} ${destroot}${prefix}/bin/
+    }
+    notes "
+    To make this the default terraform run:
+        sudo port select --set opentofu opentofu-${major}.${minor}
+    "
+}
